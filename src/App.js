@@ -1,9 +1,9 @@
 /** @format */
 
+// File: App.jsx
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import SubscriberList from './pages/SubscriberList';
 import Dashboard from './pages/Dashboard';
+import SubscriberList from './pages/SubscriberList';
 import Expenses from './pages/Expenses';
 
 export default function App() {
@@ -13,7 +13,7 @@ export default function App() {
 				<nav className='mb-4 flex gap-4 text-blue-600'>
 					<Link to='/'>Dashboard</Link>
 					<Link to='/subscribers'>Subscribers</Link>
-					<Link to='/expenses'>expenses</Link>
+					<Link to='/expenses'>Expenses</Link>
 				</nav>
 
 				<Routes>
