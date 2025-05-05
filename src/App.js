@@ -1,6 +1,5 @@
 /** @format */
 
-// File: App.jsx
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import SubscriberList from './pages/SubscriberList';
@@ -8,7 +7,7 @@ import Expenses from './pages/Expenses';
 
 export default function App() {
 	return (
-		<Router>
+		<Router basename='/Subscriber-Management'>
 			<div className='min-h-screen bg-gray-100 p-4'>
 				<nav className='mb-4 flex gap-4 text-blue-600'>
 					<Link to='/'>Dashboard</Link>
