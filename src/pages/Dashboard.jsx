@@ -2,73 +2,82 @@
 import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { getMonthsDiff } from '../utils/subscriberUtils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { getMonthsDiff } from '../utils/subscriberUtils';
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ total: 0, due: 0, complete: 0, totalPaid: 0 });
+  const [stats, setStats] = useState({ total: 0, due: 0, complete: 0, totalPaid: 0, revenue: 0, totalExpenses: 0, net: 0 });
   const [chartData, setChartData] = useState([]);
   const [subscriberBreakdown, setSubscriberBreakdown] = useState([]);
+  const [discountHistory, setDiscountHistory] = useState([]);
   const [selectedYear, setSelectedYear] = useState('All');
 
-  const yearsAvailable = Array.from(new Set(chartData.map(entry => entry.month.split('-')[0])));
-
-  const filteredChartData = selectedYear === 'All'
-    ? chartData
-    : chartData.filter(entry => entry.month.startsWith(selectedYear));
-
   useEffect(() => {
-    const fetchStats = async () => {
-      const subSnap = await getDocs(collection(db, 'subscribers'));
-      const expSnap = await getDocs(collection(db, 'expenses'));
+    const fetchData = async () => {
+      const subsSnap = await getDocs(collection(db, 'subscribers'));
+      const expensesSnap = await getDocs(collection(db, 'expenses'));
 
       const now = new Date();
-      const processed = subSnap.docs.map(doc => {
+      const subscribers = subsSnap.docs.map(doc => {
         const sub = doc.data();
         const paidMonths = sub.paidMonths || 0;
         const totalMonths = getMonthsDiff(sub.startDate);
-        return {
-          ...sub,
-          paidMonths,
-          due: paidMonths < 24 && paidMonths < totalMonths
-        };
+        const discounts = sub.discounts || {};
+        return { ...sub, paidMonths, totalMonths, discounts };
       });
 
-      const total = processed.length;
-      const totalPaid = processed.reduce((sum, sub) => sum + (sub.paidMonths || 0), 0);
-      const due = processed.filter(sub => sub.due).length;
-      const complete = total - due;
-      const revenue = totalPaid * 30;
-
       const monthlyRevenue = {};
-      processed.forEach(sub => {
-        const startDate = new Date(sub.startDate);
+      let totalPaid = 0;
+      const discountHistory = [];
+
+      subscribers.forEach(sub => {
+        const start = new Date(sub.startDate);
         for (let i = 0; i < sub.paidMonths; i++) {
-          const monthKey = `${startDate.getFullYear()}-${String(startDate.getMonth() + i + 1).padStart(2, '0')}`;
-          monthlyRevenue[monthKey] = (monthlyRevenue[monthKey] || 0) + 30;
+          const date = new Date(start);
+          date.setMonth(date.getMonth() + i);
+          const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          const discount = sub.discounts?.[key] || 0;
+          const amount = 30 - discount;
+          monthlyRevenue[key] = (monthlyRevenue[key] || 0) + amount;
+          totalPaid += amount;
+
+          if (discount > 0) {
+            discountHistory.push({ name: sub.name, month: key, discount });
+          }
         }
       });
 
-      const chartDataFormatted = Object.entries(monthlyRevenue).map(([month, revenue]) => ({
+      const chartData = Object.entries(monthlyRevenue).map(([month, revenue]) => ({
         month,
         revenue
       })).sort((a, b) => new Date(a.month) - new Date(b.month));
 
-      const subscriberRevenue = processed.map(sub => ({
-        name: sub.name,
-        revenue: sub.paidMonths * 30
-      })).sort((a, b) => b.revenue - a.revenue);
+      const expenses = expensesSnap.docs.map(doc => doc.data());
+      const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      const revenue = totalPaid;
 
-      const expenseData = expSnap.docs.map(doc => doc.data());
-      const totalExpenses = expenseData.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      setStats({
+        total: subscribers.length,
+        due: subscribers.filter(s => s.paidMonths < 24 && s.paidMonths < s.totalMonths).length,
+        complete: subscribers.filter(s => s.paidMonths >= s.totalMonths).length,
+        totalPaid,
+        revenue,
+        totalExpenses,
+        net: revenue - totalExpenses
+      });
 
-      setStats({ total, due, complete, totalPaid, revenue, totalExpenses, net: revenue - totalExpenses });
-      setChartData(chartDataFormatted);
-      setSubscriberBreakdown(subscriberRevenue);
+      setChartData(chartData);
+      setSubscriberBreakdown(
+        subscribers.map(s => ({ name: s.name, revenue: s.paidMonths * 30 })).sort((a, b) => b.revenue - a.revenue)
+      );
+      setDiscountHistory(discountHistory.sort((a, b) => a.month.localeCompare(b.month)));
     };
 
-    fetchStats();
+    fetchData();
   }, []);
+
+  const yearsAvailable = Array.from(new Set(chartData.map(entry => entry.month.split('-')[0])));
+  const filteredChartData = selectedYear === 'All' ? chartData : chartData.filter(entry => entry.month.startsWith(selectedYear));
 
   return (
     <div className="space-y-6">
@@ -138,6 +147,28 @@ export default function Dashboard() {
               <tr key={i} className="border-b">
                 <td className="p-2">{sub.name}</td>
                 <td className="p-2">{sub.revenue}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-white p-4 rounded-xl shadow">
+        <h2 className="text-lg font-semibold mb-4">Discount History</h2>
+        <table className="w-full text-sm">
+          <thead className="bg-gray-200 text-left">
+            <tr>
+              <th className="p-2">Name</th>
+              <th className="p-2">Month</th>
+              <th className="p-2">Discount (SAR)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {discountHistory.map((entry, index) => (
+              <tr key={index} className="border-b">
+                <td className="p-2">{entry.name}</td>
+                <td className="p-2">{entry.month}</td>
+                <td className="p-2">{entry.discount}</td>
               </tr>
             ))}
           </tbody>

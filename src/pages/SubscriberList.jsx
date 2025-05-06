@@ -24,14 +24,20 @@ export default function SubscriberList() {
 		name: '',
 		phone: '',
 		startDate: '',
-		discount: 0,
+		discounts: {},
+		payments: {},
 	});
 
-	const handleCheckboxChange = async (subscriberId, currentPaid) => {
-		const subscriberRef = doc(db, 'subscribers', subscriberId);
-		await updateDoc(subscriberRef, {
-			paidMonths: currentPaid + 1,
-		});
+	const currentMonthKey = new Date().toISOString().slice(0, 7);
+
+	const handlePaymentChange = async (subscriberId, value) => {
+		const ref = doc(db, 'subscribers', subscriberId);
+		const snapshot = await getDocs(collection(db, 'subscribers'));
+		const docData = snapshot.docs
+			.find((doc) => doc.id === subscriberId)
+			?.data();
+		const payments = { ...docData.payments, [currentMonthKey]: Number(value) };
+		await updateDoc(ref, { payments });
 		window.location.reload();
 	};
 
@@ -42,9 +48,16 @@ export default function SubscriberList() {
 		await addDoc(collection(db, 'subscribers'), {
 			...newSubscriber,
 			paidMonths: 0,
-			discount: Number(newSubscriber.discount) || 0,
+			discounts: newSubscriber.discounts || {},
+			payments: newSubscriber.payments || {},
 		});
-		setNewSubscriber({ name: '', phone: '', startDate: '', discount: 0 });
+		setNewSubscriber({
+			name: '',
+			phone: '',
+			startDate: '',
+			discounts: {},
+			payments: {},
+		});
 		window.location.reload();
 	};
 
@@ -55,8 +68,11 @@ export default function SubscriberList() {
 		}
 	};
 
-	const handleEdit = async (id, updatedSub) => {
-		await updateDoc(doc(db, 'subscribers', id), updatedSub);
+	const handleEdit = async (id, updatedSub, monthDiscount) => {
+		const subRef = doc(db, 'subscribers', id);
+		const discounts = updatedSub.discounts || {};
+		discounts[currentMonthKey] = monthDiscount;
+		await updateDoc(subRef, { ...updatedSub, discounts });
 		window.location.reload();
 	};
 
@@ -67,7 +83,10 @@ export default function SubscriberList() {
 			const list = snapshot.docs.map((docSnap) => {
 				const sub = docSnap.data();
 				const paidMonths = sub.paidMonths || 0;
-				const discount = Number(sub.discount || 0);
+				const discounts = sub.discounts || {};
+				const payments = sub.payments || {};
+				const discount = Number(discounts[currentMonthKey] || 0);
+				const payment = Number(payments[currentMonthKey] || 0);
 				const nextDueDate = getNextDueDate(sub.startDate, paidMonths);
 				const monthlyFee = 30 - discount;
 
@@ -88,11 +107,14 @@ export default function SubscriberList() {
 					...sub,
 					paidMonths,
 					discount,
+					discounts,
+					payment,
+					payments,
 					remainingMonths: 24 - paidMonths,
 					due: paidMonths < 24,
-					whatsappLink: `https://web.whatsapp.com/send?phone=${
-						sub.phone
-					}&text=${encodeURIComponent(message)}`,
+					whatsappLink: `https://wa.me/${sub.phone}?text=${encodeURIComponent(
+						message
+					)}`,
 				};
 			});
 
@@ -101,7 +123,7 @@ export default function SubscriberList() {
 		};
 
 		fetchData();
-	}, []);
+	}, [currentMonthKey]);
 
 	if (loading) return <div className='p-4'>Loading subscribers...</div>;
 
@@ -111,7 +133,7 @@ export default function SubscriberList() {
 
 			<form
 				onSubmit={handleAddSubscriber}
-				className='grid grid-cols-1 sm:grid-cols-5 gap-4 bg-gray-50 p-4 rounded'>
+				className='grid grid-cols-1 sm:grid-cols-6 gap-4 bg-gray-50 p-4 rounded'>
 				<input
 					type='text'
 					placeholder='Name'
@@ -141,9 +163,30 @@ export default function SubscriberList() {
 				<input
 					type='number'
 					placeholder='Discount'
-					value={newSubscriber.discount}
+					value={newSubscriber.discounts?.[currentMonthKey] || ''}
 					onChange={(e) =>
-						setNewSubscriber({ ...newSubscriber, discount: e.target.value })
+						setNewSubscriber({
+							...newSubscriber,
+							discounts: {
+								...newSubscriber.discounts,
+								[currentMonthKey]: Number(e.target.value) || 0,
+							},
+						})
+					}
+					className='border p-2 rounded'
+				/>
+				<input
+					type='number'
+					placeholder='Initial Payment'
+					value={newSubscriber.payments?.[currentMonthKey] || ''}
+					onChange={(e) =>
+						setNewSubscriber({
+							...newSubscriber,
+							payments: {
+								...newSubscriber.payments,
+								[currentMonthKey]: Number(e.target.value) || 0,
+							},
+						})
 					}
 					className='border p-2 rounded'
 				/>
@@ -162,8 +205,8 @@ export default function SubscriberList() {
 						<th className='p-2'>Start Date</th>
 						<th className='p-2'>Paid</th>
 						<th className='p-2'>Remain</th>
-						<th className='p-2'>Discount</th>
-						<th className='p-2'>Mark Paid</th>
+						<th className='p-2'>{currentMonthKey} Discount</th>
+						<th className='p-2'>{currentMonthKey} Payment</th>
 						<th className='p-2'>WhatsApp</th>
 						<th className='p-2'>Actions</th>
 					</tr>
@@ -213,30 +256,63 @@ export default function SubscriberList() {
 							</td>
 							<td className='p-2'>{sub.paidMonths}</td>
 							<td className='p-2'>{sub.remainingMonths}</td>
+
 							<td className='p-2'>
 								<input
 									type='number'
 									className='w-full border rounded px-1'
-									value={sub.discount || 0}
+									value={sub.discounts?.[currentMonthKey] || 0}
+									onKeyDown={(e) => {
+										if (e.key === 'Enter') {
+											e.preventDefault();
+											handleEdit(
+												sub.id,
+												{
+													name: sub.name,
+													phone: sub.phone,
+													startDate: sub.startDate,
+													discounts: {
+														...sub.discounts,
+														[currentMonthKey]: Number(e.target.value) || 0,
+													},
+													payments: sub.payments || {},
+												},
+												Number(e.target.value) || 0
+											);
+										}
+									}}
 									onChange={(e) =>
 										setSubscribers((prev) => {
 											const copy = [...prev];
-											copy[i].discount = e.target.value;
+											copy[i].discounts[currentMonthKey] =
+												Number(e.target.value) || 0;
 											return copy;
 										})
 									}
 								/>
 							</td>
 							<td className='p-2'>
-								{sub.remainingMonths > 0 && (
-									<input
-										type='checkbox'
-										onChange={() =>
-											handleCheckboxChange(sub.id, sub.paidMonths)
+								<input
+									type='number'
+									className='w-full border rounded px-1'
+									value={sub.payments?.[currentMonthKey] || 0}
+									onKeyDown={(e) => {
+										if (e.key === 'Enter') {
+											e.preventDefault();
+											handlePaymentChange(sub.id, e.target.value);
 										}
-									/>
-								)}
+									}}
+									onChange={(e) =>
+										setSubscribers((prev) => {
+											const copy = [...prev];
+											copy[i].payments[currentMonthKey] =
+												Number(e.target.value) || 0;
+											return copy;
+										})
+									}
+								/>
 							</td>
+
 							<td className='p-2'>
 								<a
 									href={sub.whatsappLink}
@@ -249,12 +325,17 @@ export default function SubscriberList() {
 							<td className='p-2 flex gap-1'>
 								<button
 									onClick={() =>
-										handleEdit(sub.id, {
-											name: sub.name,
-											phone: sub.phone,
-											startDate: sub.startDate,
-											discount: Number(sub.discount || 0),
-										})
+										handleEdit(
+											sub.id,
+											{
+												name: sub.name,
+												phone: sub.phone,
+												startDate: sub.startDate,
+												discounts: sub.discounts || {},
+												payments: sub.payments || {},
+											},
+											sub.discounts?.[currentMonthKey] || 0
+										)
 									}
 									className='bg-yellow-400 text-white px-2 py-1 rounded'>
 									Save
