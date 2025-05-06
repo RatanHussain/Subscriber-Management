@@ -51,7 +51,7 @@ export default function SubscriberList() {
 			paidMonths: updatedPaidMonths,
 		});
 
-		// window.location.reload();
+		window.location.reload();
 	};
 
 	const handleAddSubscriber = async (e) => {

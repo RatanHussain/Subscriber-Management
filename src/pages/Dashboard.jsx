@@ -24,7 +24,6 @@ export default function Dashboard() {
 	});
 	const [chartData, setChartData] = useState([]);
 	const [subscriberBreakdown, setSubscriberBreakdown] = useState([]);
-	const [discountHistory, setDiscountHistory] = useState([]);
 	const [selectedYear, setSelectedYear] = useState('All');
 
 	useEffect(() => {
@@ -115,9 +114,6 @@ export default function Dashboard() {
 
 			setChartData(chartDataFormatted);
 			setSubscriberBreakdown(breakdown.sort((a, b) => b.revenue - a.revenue));
-			setDiscountHistory(
-				allDiscounts.sort((a, b) => a.month.localeCompare(b.month))
-			);
 		};
 
 		fetchData();
@@ -200,28 +196,6 @@ export default function Dashboard() {
 								<td className='p-2'>{sub.name}</td>
 								<td className='p-2'>{sub.revenue}</td>
 								{/* <td className='p-2'>{sub.outstandingBalance?.toFixed(2)}</td> */}
-							</tr>
-						))}
-					</tbody>
-				</table>
-			</div>
-
-			<div className='bg-white p-4 rounded-xl shadow'>
-				<h2 className='text-lg font-semibold mb-4'>Discount History</h2>
-				<table className='w-full text-sm'>
-					<thead className='bg-gray-200 text-left'>
-						<tr>
-							<th className='p-2'>Name</th>
-							<th className='p-2'>Month</th>
-							<th className='p-2'>Discount (SAR)</th>
-						</tr>
-					</thead>
-					<tbody>
-						{discountHistory.map((entry, index) => (
-							<tr key={index} className='border-b'>
-								<td className='p-2'>{entry.name}</td>
-								<td className='p-2'>{entry.month}</td>
-								<td className='p-2'>{entry.discount}</td>
 							</tr>
 						))}
 					</tbody>
