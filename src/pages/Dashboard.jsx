@@ -191,10 +191,7 @@ export default function Dashboard() {
 						<tr>
 							<th className='p-2'>Name</th>
 							<th className='p-2'>Total Paid (SAR)</th>
-							<th className='p-2'>Total Discount (SAR)</th>
-							<th className='p-2'>Net Revenue (SAR)</th>
-							<th className='p-2'>Usage (SAR)</th>
-							<th className='p-2'>Outstanding (SAR)</th>
+							{/* <th className='p-2'>Outstanding (SAR)</th> */}
 						</tr>
 					</thead>
 					<tbody>
@@ -202,10 +199,7 @@ export default function Dashboard() {
 							<tr key={i} className='border-b'>
 								<td className='p-2'>{sub.name}</td>
 								<td className='p-2'>{sub.revenue}</td>
-								<td className='p-2'>{sub.totalDiscount}</td>
-								<td className='p-2'>{sub.net}</td>
-								<td className='p-2'>{sub.subscriberUsage?.toFixed(2)}</td>
-								<td className='p-2'>{sub.outstandingBalance?.toFixed(2)}</td>
+								{/* <td className='p-2'>{sub.outstandingBalance?.toFixed(2)}</td> */}
 							</tr>
 						))}
 					</tbody>
