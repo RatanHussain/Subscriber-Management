@@ -36,23 +36,26 @@ export default function Dashboard() {
 
 			const now = new Date();
 			const subscribers = subsSnap.docs.map((doc) => doc.data());
-			const expenses = expensesSnap.docs.map((doc) => doc.data());
-
-			let revenueMap = {};
-			let totalPaid = 0;
-			let allDiscounts = [];
 
 			// Moved this above to avoid redeclaration
-			// Recalculate totalExpenses above breakdown to avoid redeclaration
+			const expenses = expensesSnap.docs.map((doc) => doc.data());
 			const totalExpensesValue = expenses.reduce(
 				(sum, e) => sum + Number(e.amount || 0),
 				0
 			);
+
+			let revenueMap = {};
+			let totalPaid = 0;
+			let totalSubPaymentsMap = {};
+			let allDiscounts = [];
+
 			const breakdown = subscribers.map((sub) => {
 				const payments = sub.payments || {};
 				const discounts = sub.discounts || {};
 
 				Object.entries(payments).forEach(([month, amount]) => {
+					totalSubPaymentsMap[sub.name] =
+						(totalSubPaymentsMap[sub.name] || 0) + Number(amount);
 					revenueMap[month] = (revenueMap[month] || 0) + Number(amount);
 					totalPaid += Number(amount);
 				});
@@ -61,10 +64,7 @@ export default function Dashboard() {
 					allDiscounts.push({ name: sub.name, month, discount: value });
 				});
 
-				const totalSubRevenue = Object.values(payments).reduce(
-					(sum, v) => sum + Number(v || 0),
-					0
-				);
+				const totalSubRevenue = totalSubPaymentsMap[sub.name] || 0;
 				const totalSubDiscount = Object.values(discounts).reduce(
 					(sum, v) => sum + Number(v || 0),
 					0
@@ -74,12 +74,26 @@ export default function Dashboard() {
 						? totalSubRevenue - totalExpensesValue / subscribers.length
 						: 0;
 
+				const monthsSinceStart = sub.startDate
+					? Math.max(
+							0,
+							new Date().getMonth() -
+								new Date(sub.startDate).getMonth() +
+								12 *
+									(new Date().getFullYear() -
+										new Date(sub.startDate).getFullYear())
+					  )
+					: 0;
+				const expectedRevenue = monthsSinceStart * 30;
+				const outstandingBalance = expectedRevenue - totalSubRevenue;
+
 				return {
 					name: sub.name,
 					revenue: totalSubRevenue,
 					totalDiscount: totalSubDiscount,
 					net: totalSubRevenue - totalExpensesValue / subscribers.length,
 					subscriberUsage,
+					outstandingBalance,
 				};
 			});
 
@@ -90,18 +104,13 @@ export default function Dashboard() {
 				}))
 				.sort((a, b) => new Date(a.month) - new Date(b.month));
 
-			const totalExpenses = expenses.reduce(
-				(sum, e) => sum + Number(e.amount || 0),
-				0
-			);
-
 			setStats({
 				total: subscribers.length,
 				due: subscribers.filter((s) => (s.paidMonths || 0) < 24).length,
 				complete: subscribers.filter((s) => (s.paidMonths || 0) >= 24).length,
 				revenue: totalPaid,
 				totalExpenses: totalExpensesValue,
-				net: totalPaid - totalExpenses,
+				net: totalPaid - totalExpensesValue,
 			});
 
 			setChartData(chartDataFormatted);
@@ -185,6 +194,7 @@ export default function Dashboard() {
 							<th className='p-2'>Total Discount (SAR)</th>
 							<th className='p-2'>Net Revenue (SAR)</th>
 							<th className='p-2'>Usage (SAR)</th>
+							<th className='p-2'>Outstanding (SAR)</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -195,6 +205,7 @@ export default function Dashboard() {
 								<td className='p-2'>{sub.totalDiscount}</td>
 								<td className='p-2'>{sub.net}</td>
 								<td className='p-2'>{sub.subscriberUsage?.toFixed(2)}</td>
+								<td className='p-2'>{sub.outstandingBalance?.toFixed(2)}</td>
 							</tr>
 						))}
 					</tbody>
